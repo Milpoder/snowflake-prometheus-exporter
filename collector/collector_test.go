@@ -416,13 +416,16 @@ func createMockDB(t *testing.T, enableTaskHistory bool) (*sql.DB, sqlmock.Sqlmoc
 
 	if enableTaskHistory {
 		testTaskName := "mock_task"
+		val30 := "2"
+		val31 := "1"
+		val32 := "3"
 
 		mock.ExpectQuery(taskHistoryMetricQuery).
 			WillReturnRows(
 				newRows(t, [][]*string{
 					{
 						&testTaskName, &testDB1Name, &testDB1ID, &testSchemaName, &testSchemaID,
-						&val18, &val19, &val17, &val20,
+						&val18, &val19, &val17, &val30, &val31, &val32, &val20,
 					},
 				}),
 			).

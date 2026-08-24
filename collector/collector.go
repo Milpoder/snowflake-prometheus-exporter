@@ -88,6 +88,9 @@ type Collector struct {
 	taskSucceededRate                 *prometheus.Desc
 	taskFailedRate                    *prometheus.Desc
 	taskSkippedRate                   *prometheus.Desc
+	taskCancelledRate                 *prometheus.Desc
+	taskFailedAndAutoSuspendedRate    *prometheus.Desc
+	taskSuspendedRate                 *prometheus.Desc
 	taskLastCompletedTimestampSeconds *prometheus.Desc
 	up                                *prometheus.Desc
 }
@@ -279,6 +282,24 @@ func NewCollector(logger *slog.Logger, c *Config) *Collector {
 			[]string{labelName, labelDatabaseName, labelDatabaseID, labelSchemaName, labelSchemaID},
 			nil,
 		),
+		taskCancelledRate: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "task", "cancelled_rate"),
+			"Rate of cancelled task executions per-hour over the last 24 hours.",
+			[]string{labelName, labelDatabaseName, labelDatabaseID, labelSchemaName, labelSchemaID},
+			nil,
+		),
+		taskFailedAndAutoSuspendedRate: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "task", "failed_and_auto_suspended_rate"),
+			"Rate of task executions per-hour over the last 24 hours that failed and caused the task to be automatically suspended.",
+			[]string{labelName, labelDatabaseName, labelDatabaseID, labelSchemaName, labelSchemaID},
+			nil,
+		),
+		taskSuspendedRate: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "task", "suspended_rate"),
+			"Rate of task executions per-hour over the last 24 hours that were suspended, e.g. due to a concurrent run limit.",
+			[]string{labelName, labelDatabaseName, labelDatabaseID, labelSchemaName, labelSchemaID},
+			nil,
+		),
 		taskLastCompletedTimestampSeconds: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "task", "last_completed_timestamp_seconds"),
 			"Unix timestamp of the most recent completed (succeeded or failed) execution of the task, looking back 7 days.",
@@ -328,6 +349,9 @@ func (c *Collector) Describe(descs chan<- *prometheus.Desc) {
 	descs <- c.taskSucceededRate
 	descs <- c.taskFailedRate
 	descs <- c.taskSkippedRate
+	descs <- c.taskCancelledRate
+	descs <- c.taskFailedAndAutoSuspendedRate
+	descs <- c.taskSuspendedRate
 	descs <- c.taskLastCompletedTimestampSeconds
 	descs <- c.up
 }
@@ -815,9 +839,9 @@ func (c *Collector) collectTaskHistoryMetrics(db *sql.DB, metrics chan<- prometh
 
 	for rows.Next() {
 		var name, databaseName, databaseID, schemaName, schemaID sql.NullString
-		var succeeded, failed, skipped, total sql.NullFloat64
+		var succeeded, failed, skipped, cancelled, failedAndAutoSuspended, suspended, total sql.NullFloat64
 		if err := rows.Scan(&name, &databaseName, &databaseID, &schemaName, &schemaID,
-			&succeeded, &failed, &skipped, &total); err != nil {
+			&succeeded, &failed, &skipped, &cancelled, &failedAndAutoSuspended, &suspended, &total); err != nil {
 			return fmt.Errorf("failed to scan row: %w", err)
 		}
 
@@ -836,6 +860,18 @@ func (c *Collector) collectTaskHistoryMetrics(db *sql.DB, metrics chan<- prometh
 		}
 		if skipped.Valid {
 			metrics <- prometheus.MustNewConstMetric(c.taskSkippedRate, prometheus.GaugeValue, skipped.Float64/24,
+				name.String, databaseName.String, databaseID.String, schemaName.String, schemaID.String)
+		}
+		if cancelled.Valid {
+			metrics <- prometheus.MustNewConstMetric(c.taskCancelledRate, prometheus.GaugeValue, cancelled.Float64/24,
+				name.String, databaseName.String, databaseID.String, schemaName.String, schemaID.String)
+		}
+		if failedAndAutoSuspended.Valid {
+			metrics <- prometheus.MustNewConstMetric(c.taskFailedAndAutoSuspendedRate, prometheus.GaugeValue, failedAndAutoSuspended.Float64/24,
+				name.String, databaseName.String, databaseID.String, schemaName.String, schemaID.String)
+		}
+		if suspended.Valid {
+			metrics <- prometheus.MustNewConstMetric(c.taskSuspendedRate, prometheus.GaugeValue, suspended.Float64/24,
 				name.String, databaseName.String, databaseID.String, schemaName.String, schemaID.String)
 		}
 	}

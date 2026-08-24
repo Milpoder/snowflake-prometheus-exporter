@@ -86,7 +86,9 @@ const (
 	// ACCOUNT_USAGE views queried above; its database/schema id columns are prefixed
 	// with TASK_ instead.
 	taskHistoryMetricQuery = `SELECT NAME, DATABASE_NAME, TASK_DATABASE_ID, SCHEMA_NAME, TASK_SCHEMA_ID,
-		sum(iff(STATE = 'SUCCEEDED', 1, 0)), sum(iff(STATE = 'FAILED', 1, 0)), sum(iff(STATE = 'SKIPPED', 1, 0)), count(*)
+		sum(iff(STATE = 'SUCCEEDED', 1, 0)), sum(iff(STATE = 'FAILED', 1, 0)), sum(iff(STATE = 'SKIPPED', 1, 0)),
+		sum(iff(STATE = 'CANCELLED', 1, 0)), sum(iff(STATE = 'FAILED_AND_AUTO_SUSPENDED', 1, 0)), sum(iff(STATE = 'SUSPENDED', 1, 0)),
+		count(*)
 	FROM ACCOUNT_USAGE.TASK_HISTORY
 	WHERE SCHEDULED_TIME >= dateadd(hour, -24, current_timestamp()) AND STATE != 'SCHEDULED'
 	GROUP BY NAME, DATABASE_NAME, TASK_DATABASE_ID, SCHEMA_NAME, TASK_SCHEMA_ID;`
