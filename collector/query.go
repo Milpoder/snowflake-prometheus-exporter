@@ -82,19 +82,22 @@ const (
 	GROUP BY DATABASE_NAME, DATABASE_ID;`
 
 	// https://docs.snowflake.com/en/sql-reference/account-usage/task_history.html
-	taskHistoryMetricQuery = `SELECT NAME, DATABASE_NAME, DATABASE_ID, SCHEMA_NAME, SCHEMA_ID,
+	// TASK_HISTORY does not follow the DATABASE_ID/SCHEMA_ID naming used by the other
+	// ACCOUNT_USAGE views queried above; its database/schema id columns are prefixed
+	// with TASK_ instead.
+	taskHistoryMetricQuery = `SELECT NAME, DATABASE_NAME, TASK_DATABASE_ID, SCHEMA_NAME, TASK_SCHEMA_ID,
 		sum(iff(STATE = 'SUCCEEDED', 1, 0)), sum(iff(STATE = 'FAILED', 1, 0)), sum(iff(STATE = 'SKIPPED', 1, 0)), count(*)
 	FROM ACCOUNT_USAGE.TASK_HISTORY
 	WHERE SCHEDULED_TIME >= dateadd(hour, -24, current_timestamp()) AND STATE != 'SCHEDULED'
-	GROUP BY NAME, DATABASE_NAME, DATABASE_ID, SCHEMA_NAME, SCHEMA_ID;`
+	GROUP BY NAME, DATABASE_NAME, TASK_DATABASE_ID, SCHEMA_NAME, TASK_SCHEMA_ID;`
 
 	// https://docs.snowflake.com/en/sql-reference/account-usage/task_history.html
 	// Looks back further than the rate query above so that infrequently-scheduled
 	// tasks (e.g. daily/weekly) still report a last-completed time instead of
 	// going missing from this metric between runs.
-	taskLastCompletedMetricQuery = `SELECT NAME, DATABASE_NAME, DATABASE_ID, SCHEMA_NAME, SCHEMA_ID,
+	taskLastCompletedMetricQuery = `SELECT NAME, DATABASE_NAME, TASK_DATABASE_ID, SCHEMA_NAME, TASK_SCHEMA_ID,
 		max(COMPLETED_TIME)
 	FROM ACCOUNT_USAGE.TASK_HISTORY
 	WHERE SCHEDULED_TIME >= dateadd(day, -7, current_timestamp()) AND STATE IN ('SUCCEEDED', 'FAILED')
-	GROUP BY NAME, DATABASE_NAME, DATABASE_ID, SCHEMA_NAME, SCHEMA_ID;`
+	GROUP BY NAME, DATABASE_NAME, TASK_DATABASE_ID, SCHEMA_NAME, TASK_SCHEMA_ID;`
 )

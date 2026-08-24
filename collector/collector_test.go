@@ -108,9 +108,8 @@ func TestCollector_Collect(t *testing.T) {
 
 	t.Run("Task history metrics are skipped when disabled", func(t *testing.T) {
 		// Deliberately does not register taskHistoryMetricQuery/taskLastCompletedMetricQuery
-		// with sqlmock: if the collector queried them anyway despite EnableTaskHistory being
-		// false, those calls would fail with "call to Query ... was not expected", which would
-		// surface as a scan/query error rather than silently succeeding.
+		// with sqlmock, so that if EnableTaskHistory being false failed to gate them, the
+		// collector would see those two queries fail and snowflake_up would drop to 0.
 		db, mock := createMockDB(t, false)
 		mock.MatchExpectationsInOrder(false)
 
@@ -130,9 +129,16 @@ func TestCollector_Collect(t *testing.T) {
 		families, err := reg.Gather()
 		require.NoError(t, err)
 
+		var sawUp bool
 		for _, f := range families {
 			require.NotContains(t, f.GetName(), "task", "task metrics should not be collected when EnableTaskHistory is false")
+			if f.GetName() == "snowflake_up" {
+				sawUp = true
+				require.Equal(t, float64(1), f.GetMetric()[0].GetGauge().GetValue(),
+					"snowflake_up should be 1; if it's 0, the task queries were probably issued despite being disabled")
+			}
 		}
+		require.True(t, sawUp, "expected a snowflake_up metric family")
 
 		require.NoError(t, mock.ExpectationsWereMet())
 	})

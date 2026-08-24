@@ -865,7 +865,10 @@ func (c *Collector) collectTaskLastCompletedMetrics(db *sql.DB, metrics chan<- p
 			// destination is a string, so parsing it back here keeps this collector driver-agnostic.
 			t, err := time.Parse(time.RFC3339Nano, lastCompleted.String)
 			if err != nil {
-				return fmt.Errorf("failed to parse task last-completed time: %w", err)
+				// Skip just this task rather than aborting the loop and dropping every
+				// other task's last-completed metric over one bad timestamp.
+				c.logger.Warn("Failed to parse task last-completed time, skipping.", "task", name.String, "err", err)
+				continue
 			}
 			metrics <- prometheus.MustNewConstMetric(c.taskLastCompletedTimestampSeconds, prometheus.GaugeValue,
 				float64(t.Unix()), name.String, databaseName.String, databaseID.String, schemaName.String, schemaID.String)
